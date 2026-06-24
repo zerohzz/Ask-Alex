@@ -1,0 +1,29 @@
+{
+  "name": "ask-alex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Ask Alex — RAG agent over Alex Huang's personal knowledge base. Cloud Run + Vertex AI Gemini + Postgres/pgvector.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "ingest": "tsx ingest.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "@hono/node-server": "^1.13.0",
+    "hono": "^4.6.0",
+    "pg": "^8.13.0",
+    "pgvector": "^0.2.0",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,0 +1,8 @@
+# Files not needed in the Cloud Run container build.
+.git/
+node_modules/
+dist/
+.env
+.env.local
+docs/
+*.log
