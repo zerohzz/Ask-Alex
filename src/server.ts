@@ -8,10 +8,16 @@ import { runChat, type ChatTurn } from "./chat.js";
 
 const app = new Hono();
 
+const LOCALHOST = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
 app.use(
   "/chat",
   cors({
-    origin: (origin) => (config.allowedOrigins.includes(origin) ? origin : null),
+    origin: (origin) => {
+      if (config.allowedOrigins.includes(origin)) return origin;
+      if (LOCALHOST.test(origin)) return origin; // any local dev port
+      return null;
+    },
     allowMethods: ["POST", "OPTIONS"],
     allowHeaders: ["Content-Type"],
   }),
