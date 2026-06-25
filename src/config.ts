@@ -15,8 +15,11 @@ function required(name: string): string {
 
 export const config = {
   project: process.env.GOOGLE_CLOUD_PROJECT ?? "genai-kb-agent",
-  location: process.env.GOOGLE_CLOUD_LOCATION ?? "us-central1",
-  geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.5-flash",
+  location: process.env.GOOGLE_CLOUD_LOCATION ?? "global",
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-3-flash-preview",
+  // Used automatically if the primary model 404s (e.g. a preview model gets
+  // deprecated). Must be available in the same `location` as the primary.
+  geminiModelFallback: process.env.GEMINI_MODEL_FALLBACK ?? "gemini-2.5-flash",
   embeddingModel: process.env.EMBEDDING_MODEL ?? "text-embedding-005",
   embeddingDim: 768,
   pgConnectionString: required("PG_CONNECTION_STRING"),
@@ -29,4 +32,9 @@ export const config = {
   retrievalTopK: 5,
   maxInputChars: 2000,
   maxOutputTokens: 1024,
+  // "Is Alex a good fit?" flow: wider retrieval + a longer cap for the
+  // verdict/evidence/gaps structure, and a larger input ceiling for pasted JDs.
+  fitTopK: 8,
+  fitMaxInputChars: 20000,
+  fitMaxOutputTokens: 1536,
 };

@@ -3,25 +3,25 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { streamSSE } from "hono/streaming";
 import { config } from "./config.js";
-import { ensureSchema } from "./db.js";
-import { runChat, type ChatTurn } from "./chat.js";
+import { ensureSchema, logConversation } from "./db.js";
+import { runChat, runFit, type ChatTurn } from "./chat.js";
+import { fetchUrlText, looksLikeUrl } from "./fetchJd.js";
 
 const app = new Hono();
 
 const LOCALHOST = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
-app.use(
-  "/chat",
-  cors({
-    origin: (origin) => {
-      if (config.allowedOrigins.includes(origin)) return origin;
-      if (LOCALHOST.test(origin)) return origin; // any local dev port
-      return null;
-    },
-    allowMethods: ["POST", "OPTIONS"],
-    allowHeaders: ["Content-Type"],
-  }),
-);
+const corsMw = cors({
+  origin: (origin) => {
+    if (config.allowedOrigins.includes(origin)) return origin;
+    if (LOCALHOST.test(origin)) return origin; // any local dev port
+    return null;
+  },
+  allowMethods: ["POST", "OPTIONS"],
+  allowHeaders: ["Content-Type"],
+});
+app.use("/chat", corsMw);
+app.use("/fit", corsMw);
 
 app.get("/", (c) =>
   c.json({
@@ -97,14 +97,97 @@ app.post("/chat", async (c) => {
   const result = validate(body);
   if ("error" in result) return c.json(result, 400);
 
+  const question = result[result.length - 1]!.text;
+
   return streamSSE(c, async (stream) => {
+    let answer = "";
+    let escalated = false;
     try {
       for await (const event of runChat(result)) {
+        if (event.type === "delta") answer += event.text;
+        else if (event.type === "escalation") escalated = true;
         await stream.writeSSE({ data: JSON.stringify(event) });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Internal error";
       await stream.writeSSE({ data: JSON.stringify({ type: "error", message }) });
+    } finally {
+      // Best-effort archive; never let a logging failure surface to the user.
+      try {
+        await logConversation(question, answer, escalated);
+      } catch (err) {
+        console.error("Failed to archive conversation:", err);
+      }
+    }
+  });
+});
+
+// "Is Alex a good fit for this role?" — accepts a JD link or pasted JD text.
+app.post("/fit", async (c) => {
+  const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  if (rateLimited(ip)) {
+    return c.json({ error: "Rate limit exceeded. Try again shortly." }, 429);
+  }
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON body" }, 400);
+  }
+  if (typeof body !== "object" || body === null || typeof (body as { input?: unknown }).input !== "string") {
+    return c.json({ error: "Body must be { input: string }" }, 400);
+  }
+  const raw = (body as { input: string }).input.trim();
+  if (!raw) return c.json({ error: "Provide a job description link or text." }, 400);
+  if (raw.length > config.fitMaxInputChars) {
+    return c.json({ error: `Input too long (max ${config.fitMaxInputChars} chars)` }, 400);
+  }
+
+  return streamSSE(c, async (stream) => {
+    // Resolve the JD text: fetch the link, or use the pasted text directly.
+    let jdText = raw;
+    let label = "pasted job description";
+    if (looksLikeUrl(raw)) {
+      label = raw;
+      try {
+        jdText = await fetchUrlText(raw);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "Could not read that link.";
+        await stream.writeSSE({
+          data: JSON.stringify({
+            type: "error",
+            message: `${reason} Paste the job description text instead and I'll assess the fit.`,
+          }),
+        });
+        return;
+      }
+    }
+    if (jdText.length < 80) {
+      await stream.writeSSE({
+        data: JSON.stringify({
+          type: "error",
+          message: "That didn't look like a job description — paste the role's text and I'll assess the fit.",
+        }),
+      });
+      return;
+    }
+
+    let answer = "";
+    try {
+      for await (const event of runFit(jdText)) {
+        if (event.type === "delta") answer += event.text;
+        await stream.writeSSE({ data: JSON.stringify(event) });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      await stream.writeSSE({ data: JSON.stringify({ type: "error", message }) });
+    } finally {
+      try {
+        await logConversation(`[FIT] ${label.slice(0, 300)}`, answer, false);
+      } catch (err) {
+        console.error("Failed to archive fit request:", err);
+      }
     }
   });
 });
