@@ -68,7 +68,13 @@ async function main() {
   }
   console.log(`Parsed ${files.length} articles → ${rows.length} chunks. Embedding...`);
 
-  const embeddings = await embedBatch(rows.map((r) => r.content));
+  // Embed the chunk WITH its title/category prepended (sharpens topical match),
+  // but store the raw `content` for display/citation. RETRIEVAL_DOCUMENT pairs
+  // with RETRIEVAL_QUERY on the query side (only active when EMBED_TASK_TYPES=1).
+  const embedInput = rows.map((r) =>
+    `${r.title}${r.category ? ` — ${r.category}` : ""}\n\n${r.content}`,
+  );
+  const embeddings = await embedBatch(embedInput, "RETRIEVAL_DOCUMENT");
 
   const client = await pool.connect();
   try {

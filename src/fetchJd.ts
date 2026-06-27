@@ -10,6 +10,41 @@ export function looksLikeUrl(s: string): boolean {
   return /^https?:\/\/[^\s]+$/i.test(s.trim());
 }
 
+// Major job boards that bot-block or render server-side-empty (JS-only). Fetching
+// these always fails or returns a login/anti-bot wall, so we short-circuit with a
+// clear "paste the text" message instead of waiting out an 8s doomed fetch.
+const BLOCKED_BOARDS: { match: (host: string) => boolean; name: string }[] = [
+  { match: (h) => h.endsWith("linkedin.com"), name: "LinkedIn" },
+  { match: (h) => h.includes("seek.com"), name: "Seek" },
+  { match: (h) => h.endsWith("indeed.com") || h.includes("indeed."), name: "Indeed" },
+  { match: (h) => h.includes("glassdoor."), name: "Glassdoor" },
+  { match: (h) => h.endsWith("ziprecruiter.com"), name: "ZipRecruiter" },
+];
+
+/** Friendly board name if the host is a known bot-blocking job board, else null. */
+function blockedBoardName(host: string): string | null {
+  const h = host.toLowerCase();
+  return BLOCKED_BOARDS.find((b) => b.match(h))?.name ?? null;
+}
+
+/** Heuristic: did we get a login/anti-bot wall rather than a real posting? */
+function looksLikeWall(text: string): boolean {
+  if (text.length < 200) return true; // JS-only pages reduce to near-nothing
+  const t = text.toLowerCase();
+  const walls = [
+    "sign in to continue",
+    "log in to continue",
+    "verify you are human",
+    "are you a robot",
+    "enable javascript",
+    "please enable js",
+    "access denied",
+    "captcha",
+  ];
+  // A wall page is short AND dominated by these phrases.
+  return text.length < 600 && walls.some((w) => t.includes(w));
+}
+
 /**
  * Reject non-public targets before fetching. Mitigates SSRF against cloud
  * metadata / internal services from this public endpoint. (Literal-host check;
@@ -66,6 +101,13 @@ export function htmlToText(html: string): string {
 /** Fetch a URL and return its readable text. Throws a user-facing message on failure. */
 export async function fetchUrlText(rawUrl: string): Promise<string> {
   const url = assertPublicUrl(rawUrl);
+
+  // Short-circuit known bot-blocking boards before spending the fetch budget.
+  const board = blockedBoardName(url.hostname);
+  if (board) {
+    throw new Error(`${board} blocks automated page reads, so I can't open that link.`);
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let res: Response;
@@ -90,5 +132,9 @@ export async function fetchUrlText(rawUrl: string): Promise<string> {
   if (!ctype.includes("html") && !ctype.includes("text")) {
     throw new Error("That link is not a readable web page.");
   }
-  return htmlToText(await res.text());
+  const text = htmlToText(await res.text());
+  if (looksLikeWall(text)) {
+    throw new Error("That link came back as a login or anti-bot page, not a job description.");
+  }
+  return text;
 }
