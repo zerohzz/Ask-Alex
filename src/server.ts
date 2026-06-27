@@ -193,7 +193,9 @@ app.post("/fit", async (c) => {
 });
 
 async function main() {
-  await ensureSchema();
+  // SKIP_SCHEMA_INIT=1 lets local test runs against the shared prod DB stay
+  // strictly read-only (no CREATE EXTENSION/TABLE/INDEX DDL). Prod boots without it.
+  if (process.env.SKIP_SCHEMA_INIT !== "1") await ensureSchema();
   serve({ fetch: app.fetch, port: config.port }, (info) => {
     console.log(`kb-agent listening on :${info.port}`);
   });

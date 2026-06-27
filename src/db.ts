@@ -61,6 +61,7 @@ export async function logConversation(
   answer: string,
   escalated: boolean,
 ): Promise<void> {
+  if (config.disableConversationLog) return;
   await pool.query(
     `INSERT INTO conversations (question, answer, escalated) VALUES ($1, $2, $3)`,
     [question, answer, escalated],
