@@ -17,8 +17,13 @@ interface Article {
 }
 
 function parseFrontmatter(raw: string): Article {
-  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) return { title: "Untitled", category: null, sourceUrl: null, body: raw.trim() };
+  // Normalize BOM + CRLF first: Windows-authored corpus files use \r\n, and the
+  // frontmatter regex below anchors on \n — without this, every CRLF file
+  // silently parses as "Untitled" with null category/source_url.
+  const noBom = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+  const text = noBom.replace(/\r\n/g, "\n");
+  const match = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) return { title: "Untitled", category: null, sourceUrl: null, body: text.trim() };
   const [, fm, body] = match;
   const meta: Record<string, string> = {};
   for (const line of fm!.split("\n")) {

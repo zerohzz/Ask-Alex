@@ -41,6 +41,15 @@ export const config = {
   // out-of-scope queries land > ~0.60. Re-validate after switching embedding
   // task types (see EMBED_TASK_TYPES), which shifts the distance distribution.
   retrievalCandidateK: 12,
+  // Hybrid retrieval: fuse dense (pgvector cosine) with sparse (Postgres
+  // full-text) via Reciprocal Rank Fusion. Dense alone smears exact technical
+  // tokens (error codes, `UNABLE_TO_LOCK_ROW`, `101 SOQL`); FTS nails them.
+  // Set HYBRID_SEARCH=0 to fall back to dense-only. Degrades to dense-only
+  // automatically if the content_tsv column is absent (pre-migration).
+  hybridSearch: process.env.HYBRID_SEARCH !== "0",
+  // RRF smoothing constant. Standard default (60): larger => flatter fusion
+  // (rank position matters less), smaller => top ranks dominate.
+  rrfK: Number(process.env.RRF_K ?? 60),
   retrievalMaxDistance: Number(process.env.RETRIEVAL_MAX_DISTANCE ?? 0.55),
   // Always retain at least this many top chunks even if they're past the distance
   // threshold, so the model can judge relevance (and escalate if truly off-topic)
