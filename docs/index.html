@@ -5,83 +5,131 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ask Alex</title>
   <meta name="description" content="Ask Alex — a knowledge agent over Alex Huang's engineering knowledge base." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='%238a6d4f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6c-1 1.4-1 2.6 0 4M16 6c-1 1.4-1 2.6 0 4'/%3E%3Cpath d='M6 13h15v8a5 5 0 0 1-5 5h-5a5 5 0 0 1-5-5z'/%3E%3Cpath d='M21 15h2.5a3 3 0 0 1 0 6H21'/%3E%3C/g%3E%3C/svg%3E" />
   <style>
     :root {
       --bg: #faf8f5; --fg: #1c1a17; --muted: #6b655d; --accent: #af8f6f;
-      --card: #fff; --border: #e7e1d8; --user: #efe7dc; --code: #f2ede5;
+      --accent-strong: #8a6d4f; --card: #fff; --border: #e7e1d8;
+      --user: #efe7dc; --code: #f2ede5; --ring: #b88f63;
     }
     html[data-theme="dark"] {
       --bg: #16140f; --fg: #ece7df; --muted: #9a9389; --accent: #c8a982;
-      --card: #1f1c16; --border: #322d25; --user: #2a251d; --code: #221f19;
+      --accent-strong: #d8bd95; --card: #1f1c16; --border: #322d25;
+      --user: #2a251d; --code: #221f19; --ring: #c8a982;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0; background: var(--bg); color: var(--fg);
       font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       display: flex; flex-direction: column; min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
+    :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
     header {
-      padding: 1.4rem 1.2rem 1rem; border-bottom: 1px solid var(--border);
-      display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap;
+      padding: 1.1rem 1.2rem; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: .65rem;
     }
-    header h1 { margin: 0; font-size: 1.5rem; letter-spacing: -.01em; }
-    header p { margin: 0; color: var(--muted); font-size: .92rem; }
+    .logo { width: 30px; height: 30px; flex: none; color: var(--accent-strong); }
+    .brand { display: flex; flex-direction: column; gap: .1rem; }
+    header h1 { margin: 0; font-size: 1.18rem; letter-spacing: -.01em; line-height: 1.1; }
+    header p { margin: 0; color: var(--muted); font-size: .8rem; }
     .theme { margin-left: auto; background: none; border: 1px solid var(--border);
-      color: var(--muted); border-radius: 8px; padding: .3rem .6rem; cursor: pointer; font-size: .85rem; }
+      color: var(--muted); border-radius: 9px; width: 36px; height: 36px; cursor: pointer;
+      display: grid; place-items: center; font-size: 1rem; line-height: 1; }
+    .theme:hover { border-color: var(--accent); color: var(--fg); }
+
     main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 1.2rem;
       display: flex; flex-direction: column; gap: 1rem; }
     #log { display: flex; flex-direction: column; gap: 1rem; flex: 1; }
-    .msg { padding: .8rem 1rem; border-radius: 12px; max-width: 100%; }
+
+    /* Empty-state hero */
+    .hero { margin: auto 0; text-align: center; display: flex; flex-direction: column;
+      align-items: center; gap: 1.1rem; padding: 2rem 0 1rem; }
+    .hero .logo { width: 52px; height: 52px; }
+    .hero h2 { margin: 0; font-size: 1.25rem; font-weight: 600; letter-spacing: -.01em; }
+    .hero p { margin: 0; color: var(--muted); font-size: .95rem; max-width: 30rem; }
+
+    .msg { padding: .75rem 1rem; border-radius: 14px; max-width: 100%; }
     .msg.user { background: var(--user); align-self: flex-end; max-width: 85%; }
-    .msg.alex { background: var(--card); border: 1px solid var(--border); }
-    .msg .who { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
-      color: var(--accent); margin-bottom: .3rem; font-weight: 600; }
-    .msg pre { background: var(--code); padding: .2rem .4rem; border-radius: 6px;
+    .msg.alex { background: var(--card); border: 1px solid var(--border); position: relative; }
+    .msg.alex .body { display: block; }
+    .msg.alex .bean { color: var(--accent); margin-right: .4rem; }
+    .msg pre { background: var(--code); padding: .7rem .8rem; border-radius: 8px;
       overflow-x: auto; font-size: .9em; }
     .msg code { background: var(--code); padding: .1rem .3rem; border-radius: 4px; font-size: .9em; }
-    .sources { margin-top: .6rem; display: flex; flex-wrap: wrap; gap: .4rem; }
+    .sources { margin-top: .7rem; display: flex; flex-wrap: wrap; gap: .4rem; }
     .chip { font-size: .74rem; color: var(--muted); border: 1px solid var(--border);
       border-radius: 999px; padding: .15rem .55rem; background: var(--bg); }
-    .escalation { margin-top: .6rem; border-left: 3px solid var(--accent);
+    .escalation { margin-top: .7rem; border-left: 3px solid var(--accent);
       background: var(--code); padding: .6rem .8rem; border-radius: 6px; font-size: .92rem; }
-    .escalation a { color: var(--accent); }
-    .suggest { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .escalation a { color: var(--accent-strong); }
+
+    .suggest { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: center; }
     .suggest button { background: var(--card); border: 1px solid var(--border); color: var(--fg);
-      border-radius: 999px; padding: .4rem .8rem; cursor: pointer; font-size: .85rem; }
-    .suggest button:hover { border-color: var(--accent); }
+      border-radius: 999px; padding: .45rem .85rem; cursor: pointer; font-size: .85rem;
+      text-align: left; transition: border-color .15s, background .15s; }
+    .suggest button:hover { border-color: var(--accent); background: var(--bg); }
+
     form { display: flex; gap: .6rem; position: sticky; bottom: 0;
       background: var(--bg); padding: .8rem 0; }
-    input[type=text] { flex: 1; padding: .7rem .9rem; border: 1px solid var(--border);
-      border-radius: 10px; background: var(--card); color: var(--fg); font-size: 1rem; }
-    button.send { background: var(--accent); color: #fff; border: none; border-radius: 10px;
-      padding: 0 1.1rem; cursor: pointer; font-weight: 600; }
+    input[type=text] { flex: 1; padding: .72rem .95rem; border: 1px solid var(--border);
+      border-radius: 11px; background: var(--card); color: var(--fg); font-size: 1rem; }
+    input[type=text]::placeholder { color: var(--muted); }
+    button.send { background: var(--accent-strong); color: #fff; border: none; border-radius: 11px;
+      padding: 0 1.2rem; cursor: pointer; font-weight: 600; }
+    button.send:hover { filter: brightness(1.06); }
     button.send:disabled { opacity: .5; cursor: default; }
+    html[data-theme="dark"] button.send { color: #16140f; }
+
     footer { text-align: center; color: var(--muted); font-size: .8rem; padding: 1rem; }
-    footer a { color: var(--accent); }
+    footer a { color: var(--accent-strong); }
     .cursor::after { content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite; }
     @keyframes blink { 0%,50% { opacity: 1 } 50.01%,100% { opacity: 0 } }
   </style>
 </head>
 <body>
   <header>
-    <h1>Ask Alex</h1>
-    <p>A knowledge agent over Alex Huang's engineering knowledge base.</p>
-    <button class="theme" id="theme">Theme</button>
-  </header>
-  <main>
-    <div id="log"></div>
-    <div class="suggest" id="suggest">
-      <button>Who is Alex?</button>
-      <button>What are Alex's engineering principles?</button>
-      <button>How does Alex approach RAG and agentic AI?</button>
-      <button>How does Alex run releases?</button>
-      <button>How do I fix UNABLE_TO_LOCK_ROW in Apex?</button>
+    <!-- steaming coffee mug -->
+    <svg class="logo" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 6c-1 1.4-1 2.6 0 4M16 6c-1 1.4-1 2.6 0 4" />
+      <path d="M6 13h15v8a5 5 0 0 1-5 5h-5a5 5 0 0 1-5-5z" />
+      <path d="M21 15h2.5a3 3 0 0 1 0 6H21" />
+    </svg>
+    <div class="brand">
+      <h1>Ask Alex</h1>
+      <p>A knowledge agent over Alex Huang's work.</p>
     </div>
+    <button class="theme" id="theme" aria-label="Toggle light or dark theme" title="Toggle theme">☾</button>
+  </header>
+
+  <main>
+    <div id="log">
+      <div class="hero" id="hero">
+        <svg class="logo" viewBox="0 0 32 32" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 6c-1 1.4-1 2.6 0 4M16 6c-1 1.4-1 2.6 0 4" />
+          <path d="M6 13h15v8a5 5 0 0 1-5 5h-5a5 5 0 0 1-5-5z" />
+          <path d="M21 15h2.5a3 3 0 0 1 0 6H21" />
+        </svg>
+        <h2>Grab a coffee and ask Alex</h2>
+        <p>Ask about Alex — his work, how he builds, and what he's after next. Grounded in a curated knowledge base.</p>
+        <div class="suggest" id="suggest">
+          <button>What roles is Alex targeting, and why the move to FDE / Applied AI?</button>
+          <button>What has Alex actually shipped with AI in production — not demos?</button>
+          <button>Can Alex own delivery end-to-end, solo, across regions?</button>
+          <button>How does Alex keep a live Salesforce org stable under pressure?</button>
+          <button>How does Alex turn vague requirements into shipped solutions?</button>
+          <button>What makes Alex different from a typical Salesforce developer?</button>
+        </div>
+      </div>
+    </div>
+
     <form id="form">
       <input type="text" id="input" placeholder="Ask about Alex's work, principles, or engineering…" autocomplete="off" />
       <button class="send" id="send" type="submit">Ask</button>
     </form>
   </main>
+
   <footer>
     Grounded in a curated knowledge base · built by Alex Huang ·
     <a href="https://alex-huang.dev" target="_blank" rel="noopener">alex-huang.dev</a>
@@ -93,17 +141,31 @@
     const form = document.getElementById("form");
     const input = document.getElementById("input");
     const send = document.getElementById("send");
+    const themeBtn = document.getElementById("theme");
     const history = [];
 
-    // Theme toggle
-    document.getElementById("theme").onclick = () => {
+    // Theme toggle (icon reflects the action's target state)
+    function syncThemeIcon() {
+      themeBtn.textContent = document.documentElement.dataset.theme === "dark" ? "☀" : "☾";
+    }
+    themeBtn.onclick = () => {
       const r = document.documentElement;
       r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark";
+      syncThemeIcon();
     };
+    syncThemeIcon();
 
-    document.getElementById("suggest").addEventListener("click", (e) => {
-      if (e.target.tagName === "BUTTON") { input.value = e.target.textContent; form.requestSubmit(); }
-    });
+    // Suggested questions (delegated; hero is removed on first submit)
+    const suggest = document.getElementById("suggest");
+    if (suggest) {
+      suggest.addEventListener("click", (e) => {
+        if (e.target.tagName === "BUTTON") { input.value = e.target.textContent; form.requestSubmit(); }
+      });
+    }
+    function clearHero() {
+      const hero = document.getElementById("hero");
+      if (hero) hero.remove();
+    }
 
     function esc(s) {
       return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -117,7 +179,8 @@
     function bubble(role) {
       const el = document.createElement("div");
       el.className = "msg " + role;
-      el.innerHTML = '<div class="who">' + (role === "user" ? "You" : "Alex") + "</div><div class='body'></div>";
+      const bean = role === "alex" ? '<span class="bean" aria-hidden="true">&#9679;</span>' : "";
+      el.innerHTML = "<div class='body'>" + bean + "</div>";
       log.appendChild(el);
       el.scrollIntoView({ behavior: "smooth", block: "end" });
       return el;
@@ -127,6 +190,7 @@
       e.preventDefault();
       const text = input.value.trim();
       if (!text) return;
+      clearHero();
       input.value = ""; send.disabled = true;
       bubble("user").querySelector(".body").textContent = text;
       history.push({ role: "user", text });
