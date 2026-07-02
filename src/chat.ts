@@ -278,6 +278,7 @@ export async function* runChat(history: ChatTurn[]): AsyncGenerator<ChatEvent> {
   const meta: GenMeta = {};
   let escalated = false;
   let error: string | undefined;
+  let answerText = "";
   try {
     for await (const ev of streamAnswer(
       history,
@@ -286,10 +287,29 @@ export async function* runChat(history: ChatTurn[]): AsyncGenerator<ChatEvent> {
       config.maxOutputTokens,
       meta,
     )) {
+      if (ev.type === "done") continue; // deferred until after the weak-context net below
       if (ev.type === "escalation") escalated = true;
+      else if (ev.type === "delta") answerText += ev.text;
       else if (ev.type === "error") error = ev.message;
       yield ev;
     }
+    // Deterministic net: the weak-context prompt note asks the model to escalate,
+    // but tool selection is probabilistic — sometimes it refuses in text instead,
+    // and it even sticks [n] citations inside refusals. All-weak matches plus a
+    // reply that is uncited OR refusal-short can only be out-of-scope, so surface
+    // the handoff card regardless. (Answerable questions never trip this: their
+    // nearest chunks sit well inside the distance threshold.)
+    const uncitedOrShort = !/\[\d+\]/.test(answerText) || answerText.length < 600;
+    if (allWeakMatches && !escalated && !error && uncitedOrShort) {
+      escalated = true;
+      yield {
+        type: "escalation",
+        reason: "out of scope — weak retrieval matches and an uncited reply",
+        summary: last.text.slice(0, 200),
+        priority: "normal",
+      };
+    }
+    yield { type: "done" };
   } finally {
     logTurn({
       endpoint: "chat",
