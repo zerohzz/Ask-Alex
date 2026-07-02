@@ -34,7 +34,7 @@ export async function ensureSchema(): Promise<void> {
   try {
     await client.query("CREATE EXTENSION IF NOT EXISTS vector");
     await client.query(`
-      CREATE TABLE IF NOT EXISTS kb_chunks (
+      CREATE TABLE IF NOT EXISTS ${config.kbTable} (
         id          BIGSERIAL PRIMARY KEY,
         doc_title   TEXT NOT NULL,
         category    TEXT,
@@ -45,16 +45,16 @@ export async function ensureSchema(): Promise<void> {
     `);
     // Cosine distance index (matches the <=> operator used in retrieval).
     await client.query(`
-      CREATE INDEX IF NOT EXISTS kb_chunks_embedding_idx
-      ON kb_chunks USING hnsw (embedding vector_cosine_ops)
+      CREATE INDEX IF NOT EXISTS ${config.kbTable}_embedding_idx
+      ON ${config.kbTable} USING hnsw (embedding vector_cosine_ops)
     `);
     // Full-text search vector for the sparse side of hybrid retrieval. GENERATED
     // STORED => derived from doc_title + content automatically (no re-embed, no
     // re-ingest; backfills existing rows on add). Title is weighted 'A' so exact
     // topic-title matches rank above body mentions. Additive + reversible:
-    //   ALTER TABLE kb_chunks DROP COLUMN content_tsv;   -- rollback
+    //   ALTER TABLE <kb table> DROP COLUMN content_tsv;   -- rollback
     await client.query(`
-      ALTER TABLE kb_chunks
+      ALTER TABLE ${config.kbTable}
       ADD COLUMN IF NOT EXISTS content_tsv tsvector
       GENERATED ALWAYS AS (
         setweight(to_tsvector('english', coalesce(doc_title, '')), 'A') ||
@@ -62,8 +62,8 @@ export async function ensureSchema(): Promise<void> {
       ) STORED
     `);
     await client.query(`
-      CREATE INDEX IF NOT EXISTS kb_chunks_tsv_idx
-      ON kb_chunks USING GIN (content_tsv)
+      CREATE INDEX IF NOT EXISTS ${config.kbTable}_tsv_idx
+      ON ${config.kbTable} USING GIN (content_tsv)
     `);
     // Conversation archive. Internal/testing use — no PII layer yet (no IP).
     await client.query(`

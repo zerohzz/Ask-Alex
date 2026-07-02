@@ -25,6 +25,14 @@ export const config = {
   embeddingModel: process.env.EMBEDDING_MODEL ?? "text-embedding-005",
   embeddingDim: 768,
   pgConnectionString: required("PG_CONNECTION_STRING"),
+  // Chunk-table override so a candidate re-ingest (e.g. EMBED_TASK_TYPES=1) can
+  // be built and eval'd in a shadow table on the live DB without touching the
+  // serving table — and later promoted by just flipping this env var.
+  kbTable: (() => {
+    const t = process.env.KB_TABLE ?? "kb_chunks";
+    if (!/^[a-z_][a-z0-9_]*$/.test(t)) throw new Error(`Invalid KB_TABLE: ${t}`);
+    return t;
+  })(),
   port: Number(process.env.PORT ?? 8080),
   // Comma-separated list of allowed browser origins.
   allowedOrigins: (process.env.ALLOWED_ORIGIN ?? "https://zerohzz.github.io,https://alex-huang.dev")

@@ -1,12 +1,15 @@
 // Offline one-off: read corpus/*.md → chunk → Vertex embed → upsert into pgvector.
-// Idempotent: truncates kb_chunks and reloads. Run with `npm run ingest`.
+// Idempotent: truncates the chunk table (config.kbTable) and reloads. Run with
+// `npm run ingest`; CORPUS_DIR env overrides the source directory (e.g. a
+// staging dir including corpus-drafts/ for a shadow-table eval).
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import pgvector from "pgvector/pg";
 import { pool, ensureSchema } from "./src/db.js";
 import { embedBatch } from "./src/genai.js";
+import { config } from "./src/config.js";
 
-const CORPUS_DIR = join(import.meta.dirname, "corpus");
+const CORPUS_DIR = process.env.CORPUS_DIR ?? join(import.meta.dirname, "corpus");
 const MAX_CHARS = 1500; // ~ one embedding chunk
 
 interface Article {
@@ -83,11 +86,11 @@ async function main() {
 
   const client = await pool.connect();
   try {
-    await client.query("TRUNCATE kb_chunks RESTART IDENTITY");
+    await client.query(`TRUNCATE ${config.kbTable} RESTART IDENTITY`);
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i]!;
       await client.query(
-        `INSERT INTO kb_chunks (doc_title, category, source_url, content, embedding)
+        `INSERT INTO ${config.kbTable} (doc_title, category, source_url, content, embedding)
          VALUES ($1, $2, $3, $4, $5)`,
         [r.title, r.category, r.url, r.content, pgvector.toSql(embeddings[i]!)],
       );
@@ -96,7 +99,7 @@ async function main() {
     client.release();
   }
 
-  console.log(`Ingested ${rows.length} chunks into kb_chunks.`);
+  console.log(`Ingested ${rows.length} chunks into ${config.kbTable}.`);
   await pool.end();
 }
 

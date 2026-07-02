@@ -155,7 +155,7 @@ const REFUSAL = /can't|cannot|can not|don't|do not|isn't|not something|outside|r
 
 /** Read every chunk once and index content by doc title (a doc may have >1 chunk). */
 async function loadChunkTextByTitle() {
-  const res = await pool.query("SELECT doc_title, content FROM kb_chunks ORDER BY id");
+  const res = await pool.query(`SELECT doc_title, content FROM ${config.kbTable} ORDER BY id`);
   const map = new Map();
   for (const r of res.rows) {
     const list = map.get(r.doc_title) ?? [];

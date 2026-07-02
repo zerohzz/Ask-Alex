@@ -43,7 +43,7 @@ async function denseCandidates(queryVec: number[], candidateK: number): Promise<
   const res = await pool.query(
     `SELECT id, doc_title, category, source_url, content,
             embedding <=> $1 AS distance
-       FROM kb_chunks
+       FROM ${config.kbTable}
        ORDER BY embedding <=> $1
        LIMIT $2`,
     [pgvector.toSql(queryVec), candidateK],
@@ -75,14 +75,14 @@ async function hybridCandidates(
     `WITH dense AS (
        SELECT id, embedding <=> $1 AS distance,
               ROW_NUMBER() OVER (ORDER BY embedding <=> $1) AS rnk
-         FROM kb_chunks
+         FROM ${config.kbTable}
          ORDER BY embedding <=> $1
          LIMIT $2
      ),
      sparse AS (
        SELECT id,
               ROW_NUMBER() OVER (ORDER BY ts_rank_cd(content_tsv, q) DESC) AS rnk
-         FROM kb_chunks, websearch_to_tsquery('english', $3) q
+         FROM ${config.kbTable}, websearch_to_tsquery('english', $3) q
         WHERE content_tsv @@ q
         ORDER BY ts_rank_cd(content_tsv, q) DESC
         LIMIT $2
@@ -97,7 +97,7 @@ async function hybridCandidates(
      SELECT k.id, k.doc_title, k.category, k.source_url, k.content,
             k.embedding <=> $1 AS distance, f.score AS score
        FROM fused f
-       JOIN kb_chunks k ON k.id = f.id
+       JOIN ${config.kbTable} k ON k.id = f.id
        ORDER BY f.score DESC
        LIMIT $2`,
     [pgvector.toSql(queryVec), candidateK, query, config.rrfK],
