@@ -89,20 +89,23 @@ const LABELED = [
   { cls: "paraphrase", q: "I want lint and tests to run automatically after every edit an agent makes.", expect: ["Validator Hooks"] },
 
   // ========================= colloquial ==========================
+  // Labels widened 2026-07-02 after the corpus-draft approval: the new
+  // identity/career docs are valid answers for several of these (do NOT widen
+  // labels for unapproved corpus candidates).
   // How a recruiter or non-expert would ask. Vague but genuinely answerable.
-  { cls: "colloquial", q: "Has he actually shipped real AI things or just demos?", expect: ["AI & Agentic Engineering"] },
+  { cls: "colloquial", q: "Has he actually shipped real AI things or just demos?", expect: ["AI & Agentic Engineering", "Applied AI", "Ask Alex"] },
   { cls: "colloquial", q: "Can he work directly with customers, or is he just a coder?", expect: ["About Alex", "Solution Design & Delivery"] },
   { cls: "colloquial", q: "What's he actually like to work with?", expect: ["Engineering Principles", "About Alex"] },
   { cls: "colloquial", q: "Does he know how to ship code without breaking prod?", expect: ["DevOps & Release Management"] },
   { cls: "colloquial", q: "How does he decide things — does he just wing it?", expect: ["Engineering Principles"] },
-  { cls: "colloquial", q: "Has he actually led releases, or only written code?", expect: ["DevOps & Release Management"] },
-  { cls: "colloquial", q: "Is he a senior engineer or pretty junior?", expect: ["About Alex"] },
-  { cls: "colloquial", q: "Can he own something end to end by himself?", expect: ["About Alex"] },
-  { cls: "colloquial", q: "Would he be a good fit for a forward deployed engineer role?", expect: ["About Alex"] },
+  { cls: "colloquial", q: "Has he actually led releases, or only written code?", expect: ["DevOps & Release Management", "Career Timeline", "Funlab Delivery Outcomes"] },
+  { cls: "colloquial", q: "Is he a senior engineer or pretty junior?", expect: ["About Alex", "Career Timeline"] },
+  { cls: "colloquial", q: "Can he own something end to end by himself?", expect: ["About Alex", "Career Timeline", "What Alex Is Looking For"] },
+  { cls: "colloquial", q: "Would he be a good fit for a forward deployed engineer role?", expect: ["About Alex", "What Alex Is Looking For"] },
   { cls: "colloquial", q: "Does he write things down, or keep it all in his head?", expect: ["Engineering Principles", "Solution Design & Delivery"] },
   { cls: "colloquial", q: "How does he handle it when a project depends on another team?", expect: ["Engineering Principles", "Solution Design & Delivery"] },
-  { cls: "colloquial", q: "Is he up to date with modern AI tooling like RAG and agents?", expect: ["AI & Agentic Engineering"] },
-  { cls: "colloquial", q: "How big was the platform he actually ran?", expect: ["About Alex"] },
+  { cls: "colloquial", q: "Is he up to date with modern AI tooling like RAG and agents?", expect: ["AI & Agentic Engineering", "Applied AI"] },
+  { cls: "colloquial", q: "How big was the platform he actually ran?", expect: ["About Alex", "Career Timeline", "Funlab Delivery Outcomes"] },
 
   // ========================= ambiguous ==========================
   // Must pick the right doc among topically adjacent neighbours.
