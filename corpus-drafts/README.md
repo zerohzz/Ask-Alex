@@ -24,7 +24,7 @@ paper over (listed per the no-fabrication rule):
 
 1. ~~**Work rights / location flexibility**~~ **FILLED** by `target-roles-location-work-rights.md` (from `profile.yml`: AU citizen, no sponsorship AU/NZ, E-3 eligible; remote Melbourne / hybrid Sydney / relocation for frontier lab; up to 50% travel).
 2. **People leadership** — STILL OPEN. Resume/CV say "Technical Leadership" and "Lead Engineer" but never state whether Alex has managed people/direct reports. Fit questions for lead roles hit this gap.
-3. **Languages spoken** — STILL OPEN. Not stated in the corpus, site data, or career-ops repo.
+3. ~~**Languages spoken**~~ **FILLED** by `spoken-languages.md` (provided directly by Alex, 2026-07-02: native Mandarin + Cantonese, professional working English).
 4. **Availability / notice period** — STILL OPEN. Not stated anywhere.
 5. ~~**AI stack depth beyond this project**~~ **FILLED** by `applied-ai-llm-stack.md` (from `cv.md`: RAG/pgvector, Vertex AI, tool calling, Claude Code + governance policy, multi-LLM evaluation, Playwright+AI, Hugging Face).
 6. ~~**What he's looking for, concretely**~~ **MOSTLY FILLED** by `target-roles-location-work-rights.md` (role ladder with why-fit, frontier-lab preference). Still open: team-size preference, industries you'd avoid, hard nos.
