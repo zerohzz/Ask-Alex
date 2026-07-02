@@ -1,7 +1,7 @@
 import type { Content } from "@google/genai";
 import { ai } from "./genai.js";
 import { config } from "./config.js";
-import { retrieve, formatContext, type RetrievedChunk, type RetrievalTiming } from "./rag.js";
+import { retrieve, formatContext, fuseRankedLists, type RetrievedChunk, type RetrievalTiming } from "./rag.js";
 import { tools } from "./tools.js";
 import { logTurn } from "./observe.js";
 
@@ -38,7 +38,16 @@ export interface SourceRef {
   url: string | null;
 }
 
-function systemInstruction(context: string): string {
+function systemInstruction(context: string, allWeakMatches = false): string {
+  const weakNote = allWeakMatches
+    ? [
+        "",
+        "NOTE: every article below is only a WEAK match for this question (all beyond the relevance",
+        "threshold — they were kept so you can judge for yourself). If they don't genuinely address the",
+        "question, call escalate_to_human rather than stretching them into an answer, and do not cite",
+        "them in a refusal.",
+      ]
+    : [];
   return [
     "You are Ask Alex — the knowledge agent of Alex Huang, a Melbourne-based senior Salesforce + AI engineer.",
     "You answer questions about Alex's expertise and how he works: engineering principles, Salesforce",
@@ -66,6 +75,7 @@ function systemInstruction(context: string): string {
     "Escalation: call the escalate_to_human tool ONLY when the context below is empty or genuinely does not",
     "address the question, or when the user explicitly asks to reach the real Alex. If the context does address",
     "the question — even partially — answer it; do NOT escalate.",
+    ...weakNote,
     "",
     "=== KNOWLEDGE BASE CONTEXT ===",
     context,
@@ -259,13 +269,19 @@ export async function* runChat(history: ChatTurn[]): AsyncGenerator<ChatEvent> {
   const chunks = await retrieve(searchQuery, config.retrievalTopK, timing);
   yield { type: "sources", sources: sourceRefs(chunks) };
 
+  // All retained chunks past the relevance threshold ⇒ they only survived via
+  // minKeep; warn the model so out-of-scope questions escalate instead of
+  // producing an uncited refusal (or worse, a stretched answer).
+  const allWeakMatches =
+    chunks.length > 0 && chunks.every((c) => c.distance > config.retrievalMaxDistance);
+
   const meta: GenMeta = {};
   let escalated = false;
   let error: string | undefined;
   try {
     for await (const ev of streamAnswer(
       history,
-      systemInstruction(formatContext(chunks)),
+      systemInstruction(formatContext(chunks), allWeakMatches),
       true,
       config.maxOutputTokens,
       meta,
@@ -328,6 +344,58 @@ function fitInstruction(context: string): string {
 const FIT_EMBED_CHARS = 6000;
 
 /**
+ * Extract 3–5 standalone search queries covering a JD's key requirements.
+ * A whole JD embedded as one vector averages its requirements together, so
+ * each extracted query retrieves separately and the lists are RRF-fused.
+ * Returns null on empty/garbage output; callers fall back to single-vector
+ * retrieval on the raw JD text. Exported for the eval harness.
+ */
+export async function extractFitQueries(jdText: string): Promise<string[] | null> {
+  const prompt =
+    "Extract 3 to 5 short standalone search queries from this job description, " +
+    "covering its most important distinct requirements (technical skills, platforms, " +
+    "delivery style, customer-facing expectations). One query per line, no numbering, " +
+    "no preamble.\n\n" +
+    `${jdText}\n\nSearch queries:`;
+  const res = await ai.models.generateContent({
+    model: config.geminiModel,
+    contents: prompt,
+    // Mechanical rewrite — thinking would eat the small budget (see condenseQuery).
+    config: { temperature: 0, maxOutputTokens: 160, thinkingConfig: { thinkingBudget: 0 } },
+  });
+  const queries = (res.text ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.replace(/^[-*\d.)\s]+/, "").trim())
+    .filter((l) => l.length >= 3 && l.length <= 160);
+  return queries.length >= 2 ? queries.slice(0, 5) : null;
+}
+
+/**
+ * Fit retrieval: decompose the JD into requirement queries and fuse their
+ * retrievals; fall back to single-vector retrieval on the raw JD text if
+ * extraction fails or times out. Exported for the eval harness.
+ */
+export async function retrieveForFit(
+  jdText: string,
+  timing?: RetrievalTiming,
+): Promise<RetrievedChunk[]> {
+  const jdQuery = jdText.slice(0, FIT_EMBED_CHARS);
+  try {
+    const queries = await withTimeout(extractFitQueries(jdQuery), 5000);
+    if (queries) {
+      const lists = await Promise.all([
+        retrieve(jdQuery, config.fitTopK, timing),
+        ...queries.map((q) => retrieve(q, config.fitTopK)),
+      ]);
+      return fuseRankedLists(lists, config.fitTopK);
+    }
+  } catch {
+    // extraction failed/timed out — single-vector retrieval below
+  }
+  return retrieve(jdQuery, config.fitTopK, timing);
+}
+
+/**
  * Assess Alex's fit against a job description. Retrieves the KB chunks most
  * relevant to the JD, then streams a balanced, cited verdict. No escalation
  * tool here — this is an analysis, not a Q&A handoff.
@@ -335,7 +403,7 @@ const FIT_EMBED_CHARS = 6000;
 export async function* runFit(jdText: string): AsyncGenerator<ChatEvent> {
   const t0 = Date.now();
   const timing: RetrievalTiming = {};
-  const chunks = await retrieve(jdText.slice(0, FIT_EMBED_CHARS), config.fitTopK, timing);
+  const chunks = await retrieveForFit(jdText, timing);
   yield { type: "sources", sources: sourceRefs(chunks) };
 
   const history: ChatTurn[] = [

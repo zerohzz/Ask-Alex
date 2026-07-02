@@ -1,0 +1,12 @@
+---
+title: Funlab Delivery Outcomes — Booking Wizard, US Expansion, and Release Record
+category: Projects
+---
+
+The two flagship deliveries from Alex's time as Funlab's sole in-house Salesforce engineer, with measured outcomes.
+
+**Salesforce Digital Transformation (Jul 2023 – Jan 2024).** Joined as the sole in-house Salesforce developer during the pre-go-live phase — managing knowledge transfer, coordinating go-live preparation, and taking full technical ownership post-launch across 100+ venues in AU, NZ, and the US. Architected and delivered an enterprise-grade 8-step LWC function-booking wizard orchestrating real-time API calls across 14+ sub-components — the primary revenue-generating interface, contributing to 200% online revenue growth. Integrated Sales, Service, and Marketing Clouds into a unified 360-degree guest profile — enabling real-time booking sync, automated confirmation emails, and personalised upsell recommendations, achieving a 69% increase in online conversion rates. Stabilised revenue-critical payment workflows during live production incidents, including business-day deposit calculations, Stripe payment link generation, and payment reminder Batch Apex jobs across all regions.
+
+**Funlab USA Expansion (Jun 2024 – Mar 2026).** Led end-to-end Salesforce technical delivery for the US market entry — bringing 8 US venues onto the platform with full tax compliance, multi-currency configuration, and region-specific automation from day one. Implemented AvaTax Multi-Company (States) setup with asynchronous Apex (Queueable) and Flow tax calculations, including 20% service charge automation, tax-free/taxed event handling, and state-specific tax rules. Resolved complex US production defects — tax recalculation double-firing, AvaTax UNABLE_TO_LOCK_ROW concurrency failures, and governor limit breaches on US Quote finalisation — applying row-lock handling, bulkification, and async processing patterns. Configured US date formats, arrival-time timezone correction, region-specific layouts, US-only payment sections, queue routing for US cases/refunds/leads, and Typeform-to-Salesforce US lead routing.
+
+**Release record.** A sustained fortnightly release cadence on Azure DevOps CI/CD with SFDX Git Delta: 55 successful sprint releases over 26 months, alongside production support across 1,000+ service requests including revenue-critical hotfixes and multi-region SFMC trigger repairs.

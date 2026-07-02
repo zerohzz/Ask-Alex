@@ -3,11 +3,23 @@ import { config } from "./config.js";
 
 const { Pool } = pg;
 
-export const pool = new Pool({
-  connectionString: config.pgConnectionString,
-  ssl: { rejectUnauthorized: false }, // Neon requires SSL
-  max: 5,
-});
+// PG_OVER_WEBSOCKET=1 routes queries through Neon's WebSocket proxy on 443 —
+// a local/dev escape hatch for networks that block outbound 5432 (same SQL,
+// same pool interface). Default transport (direct TCP) unchanged in prod.
+async function createPool(): Promise<pg.Pool> {
+  if (process.env.PG_OVER_WEBSOCKET === "1") {
+    const { Pool: NeonPool, neonConfig } = await import("@neondatabase/serverless");
+    neonConfig.webSocketConstructor = WebSocket;
+    return new NeonPool({ connectionString: config.pgConnectionString, max: 5 }) as unknown as pg.Pool;
+  }
+  return new Pool({
+    connectionString: config.pgConnectionString,
+    ssl: { rejectUnauthorized: false }, // Neon requires SSL
+    max: 5,
+  });
+}
+
+export const pool = await createPool();
 
 // Note: we never read `vector` columns back into JS (queries select distance +
 // text only, and writes use pgvector.toSql to format the param), so no pgvector

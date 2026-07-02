@@ -50,7 +50,11 @@ export const config = {
   // RRF smoothing constant. Standard default (60): larger => flatter fusion
   // (rank position matters less), smaller => top ranks dominate.
   rrfK: Number(process.env.RRF_K ?? 60),
-  retrievalMaxDistance: Number(process.env.RETRIEVAL_MAX_DISTANCE ?? 0.55),
+  // 0.52 (was 0.55): eval-v2 negatives showed out-of-scope chunks landing at
+  // 0.54 (PyTorch/video-games leaks) while in-scope nearest distances peak
+  // ~0.40 — 0.52 splits the observed distributions. Re-validate after any
+  // re-embed (task types shift the distance distribution).
+  retrievalMaxDistance: Number(process.env.RETRIEVAL_MAX_DISTANCE ?? 0.52),
   // Always retain at least this many top chunks even if they're past the distance
   // threshold, so the model can judge relevance (and escalate if truly off-topic)
   // rather than being starved into a hard rule-based escalation.

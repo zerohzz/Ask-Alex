@@ -9,7 +9,7 @@ export interface RetrievedChunk {
   category: string | null;
   sourceUrl: string | null;
   content: string;
-  /** Dense cosine distance. Infinity for a sparse-only (FTS) match. */
+  /** Dense cosine distance (computed for sparse-only FTS matches too). */
   distance: number;
   /** Reciprocal-rank-fusion score (higher = better). Present in hybrid mode. */
   score?: number;
@@ -60,10 +60,11 @@ async function denseCandidates(queryVec: number[], candidateK: number): Promise<
 
 /**
  * Hybrid candidates: fuse the dense (cosine) and sparse (full-text) rankings
- * with Reciprocal Rank Fusion in a single query. `distance` is carried through
- * from the dense side (NULL → Infinity for a sparse-only hit, so the caller's
- * distance-based out-of-scope filter still governs). Throws if content_tsv is
- * absent — the caller falls back to dense-only.
+ * with Reciprocal Rank Fusion in a single query. `distance` is computed for
+ * every fused row (sparse-only hits included), so the caller's distance-based
+ * out-of-scope filter judges all candidates on the same scale instead of
+ * dropping exact-token FTS hits past the minKeep window. Throws if content_tsv
+ * is absent — the caller falls back to dense-only.
  */
 async function hybridCandidates(
   queryVec: number[],
@@ -88,14 +89,13 @@ async function hybridCandidates(
      ),
      fused AS (
        SELECT COALESCE(d.id, s.id) AS id,
-              d.distance AS distance,
               COALESCE(1.0 / ($4 + d.rnk), 0.0) +
               COALESCE(1.0 / ($4 + s.rnk), 0.0) AS score
          FROM dense d
          FULL OUTER JOIN sparse s ON s.id = d.id
      )
      SELECT k.id, k.doc_title, k.category, k.source_url, k.content,
-            f.distance AS distance, f.score AS score
+            k.embedding <=> $1 AS distance, f.score AS score
        FROM fused f
        JOIN kb_chunks k ON k.id = f.id
        ORDER BY f.score DESC
@@ -108,9 +108,7 @@ async function hybridCandidates(
     category: r.category,
     sourceUrl: r.source_url,
     content: r.content,
-    // Sparse-only hits have no dense distance → Infinity, so they survive the
-    // out-of-scope filter only via the minKeep guarantee (same as dense noise).
-    distance: r.distance == null ? Number.POSITIVE_INFINITY : Number(r.distance),
+    distance: Number(r.distance),
     score: Number(r.score),
   }));
 }
@@ -161,6 +159,31 @@ export async function retrieve(
   // + escalate_to_human tool make the final relevance call for true out-of-scope.
   const minKeep = Math.min(config.retrievalMinKeep, k);
   return ranked.filter((c, i) => i < minKeep || c.distance <= config.retrievalMaxDistance).slice(0, k);
+}
+
+/**
+ * Fuse several ranked retrieval lists into one, coverage-first. Used by /fit:
+ * a multi-requirement JD embedded as ONE vector blurs into an average, so each
+ * extracted requirement retrieves separately and the lists interleave here
+ * round-robin (rank 0 of every list, then rank 1, …). Unlike RRF-sum fusion —
+ * which lets a doc appearing mid-list everywhere outscore a doc that is rank 1
+ * for exactly one requirement — this guarantees each requirement's best
+ * evidence a seat in the context. Dedups by chunk id; returns the top `k`.
+ */
+export function fuseRankedLists(lists: RetrievedChunk[][], k: number): RetrievedChunk[] {
+  const seen = new Set<number>();
+  const fused: RetrievedChunk[] = [];
+  const maxLen = Math.max(0, ...lists.map((l) => l.length));
+  for (let rank = 0; rank < maxLen && fused.length < k; rank++) {
+    for (const list of lists) {
+      const chunk = list[rank];
+      if (!chunk || seen.has(chunk.id)) continue;
+      seen.add(chunk.id);
+      fused.push(chunk);
+      if (fused.length >= k) break;
+    }
+  }
+  return fused;
 }
 
 /** Render retrieved chunks as a numbered, citable context block for the prompt. */
