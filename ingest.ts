@@ -1,12 +1,15 @@
 // Offline one-off: read corpus/*.md → chunk → Vertex embed → upsert into pgvector.
-// Idempotent: truncates kb_chunks and reloads. Run with `npm run ingest`.
+// Idempotent: truncates the chunk table (config.kbTable) and reloads. Run with
+// `npm run ingest`; CORPUS_DIR env overrides the source directory (e.g. a
+// staging dir including corpus-drafts/ for a shadow-table eval).
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import pgvector from "pgvector/pg";
 import { pool, ensureSchema } from "./src/db.js";
 import { embedBatch } from "./src/genai.js";
+import { config } from "./src/config.js";
 
-const CORPUS_DIR = join(import.meta.dirname, "corpus");
+const CORPUS_DIR = process.env.CORPUS_DIR ?? join(import.meta.dirname, "corpus");
 const MAX_CHARS = 1500; // ~ one embedding chunk
 
 interface Article {
@@ -17,8 +20,13 @@ interface Article {
 }
 
 function parseFrontmatter(raw: string): Article {
-  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) return { title: "Untitled", category: null, sourceUrl: null, body: raw.trim() };
+  // Normalize BOM + CRLF first: Windows-authored corpus files use \r\n, and the
+  // frontmatter regex below anchors on \n — without this, every CRLF file
+  // silently parses as "Untitled" with null category/source_url.
+  const noBom = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+  const text = noBom.replace(/\r\n/g, "\n");
+  const match = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) return { title: "Untitled", category: null, sourceUrl: null, body: text.trim() };
   const [, fm, body] = match;
   const meta: Record<string, string> = {};
   for (const line of fm!.split("\n")) {
@@ -78,11 +86,11 @@ async function main() {
 
   const client = await pool.connect();
   try {
-    await client.query("TRUNCATE kb_chunks RESTART IDENTITY");
+    await client.query(`TRUNCATE ${config.kbTable} RESTART IDENTITY`);
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i]!;
       await client.query(
-        `INSERT INTO kb_chunks (doc_title, category, source_url, content, embedding)
+        `INSERT INTO ${config.kbTable} (doc_title, category, source_url, content, embedding)
          VALUES ($1, $2, $3, $4, $5)`,
         [r.title, r.category, r.url, r.content, pgvector.toSql(embeddings[i]!)],
       );
@@ -91,7 +99,7 @@ async function main() {
     client.release();
   }
 
-  console.log(`Ingested ${rows.length} chunks into kb_chunks.`);
+  console.log(`Ingested ${rows.length} chunks into ${config.kbTable}.`);
   await pool.end();
 }
 

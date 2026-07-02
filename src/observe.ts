@@ -23,6 +23,8 @@ export interface TurnLog {
   sources: SourceTrace[];
   embedMs?: number;
   searchMs?: number;
+  /** True when the sparse (full-text) side fused into retrieval this turn. */
+  hybrid?: boolean;
   /** Time from generation start to the first streamed token — the perceived-latency signal. */
   firstTokenMs?: number;
   generateMs?: number;
